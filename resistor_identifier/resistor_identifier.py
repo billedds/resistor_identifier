@@ -13,51 +13,200 @@ cx = []
 cy = []
 
 
+def set_median(res):
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set noise-filtering parameter')
+    cv2.createTrackbar('Filter level', 'Set noise-filtering parameter', 1, 6, nothing)
+
+    while(True):
+        median_kernel = cv2.getTrackbarPos('Filter level', 'Set noise-filtering parameter')
+        # need to make sure the kernel size is odd
+
+        if median_kernel == 0:
+            median_kernel = 1
+        
+        median_kernel =  (median_kernel * 2) - 1
+        median_res = cv2.medianBlur(res, median_kernel)
+        cv2.imshow('Set noise-filtering parameter', median_res)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return median_res
+
+
+
+def set_canny(gray_res):
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set thresholds for Canny edge detection')
+
+    cv2.createTrackbar('Lower threshold', 'Set thresholds for Canny edge detection', 127, 255, nothing)
+    cv2.createTrackbar('Upper threshold', 'Set thresholds for Canny edge detection', 127, 255, nothing)
+
+    while(True):
+        canny_lower = cv2.getTrackbarPos('Lower threshold', 'Set thresholds for Canny edge detection') 
+        canny_upper = cv2.getTrackbarPos('Upper threshold', 'Set thresholds for Canny edge detection')
+        canny_res = cv2.Canny(gray_res, canny_lower, canny_upper)
+        cv2.imshow('Set thresholds for Canny edge detection', canny_res)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return canny_res
+
+
+
+
+def set_dilate(canny_res):
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set dilate level')
+
+    cv2.createTrackbar('Horizontal level', 'Set dilate level', 1, 21, nothing)
+    cv2.createTrackbar('Vertical level', 'Set dilate level', 1, 21, nothing)
+    
+    while(True):
+        horiz_val = cv2.getTrackbarPos('Horizontal level', 'Set dilate level')
+        vert_val = cv2.getTrackbarPos('Vertical level', 'Set dilate level')
+
+        # have to make sure kernel values != 0
+        if horiz_val == 0:
+            horiz_val = 1
+
+        if vert_val == 0:
+            vert_val = 1
+            
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horiz_val, vert_val))
+        dilated_res = cv2.dilate(canny_res, kernel)
+        cv2.imshow('Set dilate level', dilated_res)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return dilated_res
+
+
+
+
+def set_close(dilated_res):
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set close level')
+
+    cv2.createTrackbar('Horizontal level', 'Set close level', 1, 25, nothing)
+    cv2.createTrackbar('Vertical level', 'Set close level', 1, 25, nothing)
+    
+    while(True):
+        horiz_val = cv2.getTrackbarPos('Horizontal level', 'Set close level')
+        vert_val = cv2.getTrackbarPos('Vertical level', 'Set close level')
+
+        # have to make sure kernel values != 0
+        if horiz_val == 0:
+            horiz_val = 1
+
+        if vert_val == 0:
+            vert_val = 1
+            
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horiz_val, vert_val))
+        closed_res = cv2.morphologyEx(dilated_res, cv2.MORPH_CLOSE, kernel)
+        cv2.imshow('Set close level', closed_res)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return closed_res
+
+
+
+def set_erode(closed_res):
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set erode level')
+
+    cv2.createTrackbar('Horizontal level', 'Set erode level', 1, 21, nothing)
+    cv2.createTrackbar('Vertical level', 'Set erode level', 1, 21, nothing)   
+    cv2.createTrackbar('Num. of iterations', 'Set erode level', 1, 5, nothing)
+    
+    while(True):
+        horiz_val = cv2.getTrackbarPos('Horizontal level', 'Set erode level')
+        vert_val = cv2.getTrackbarPos('Vertical level', 'Set erode level')
+        iterations = cv2.getTrackbarPos('Num. of iterations', 'Set erode level')
+
+        # have to make sure kernel values != 0
+        if horiz_val == 0:
+            horiz_val = 1
+
+        if vert_val == 0:
+            vert_val = 1
+
+        if iterations == 0:
+            iterations = 1
+                    
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horiz_val, vert_val))
+        eroded_res = cv2.erode(closed_res, kernel, iterations)
+        cv2.imshow('Set erode level', eroded_res)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return eroded_res
 
 
 
 def process_image(input_image):
 
     res = cv2.imread(input_image)
-
-    res = cv2.resize(res, (640, 480))
-    # structuring element, similar to se = ones(5, 5) in MatLab
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-    # filter out noise (e.g. white glare/reflection)
-    # res = cv2.GaussianBlur(res, (3, 3), 0)
-    cv2.waitKey(0)
-    gray_res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-    canny_res = cv2.Canny(gray_res, 100, 200)
-
-    # dilate edged image
-    dilated_res = cv2.dilate(canny_res, kernel)
-    # closing dilated image
-    closed_res = cv2.morphologyEx(dilated_res, cv2.MORPH_CLOSE, kernel)
-    # eroding image to get back to normal size
-    eroded_res = cv2.erode(closed_res, kernel, iterations = 3)
-    # binary filtered image
-    filtered_res = cv2.dilate(eroded_res, kernel)
-    # original image with the filtered image as a binary mask
-    mask = filtered_res
-    final_res = cv2.bitwise_and(res, res, mask = mask) 
-
-##    cv2.imshow('Original Resistor, 0', res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Grayscale, 1', gray_res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Canny, 2', canny_res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Dilated, 3', dilated_res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Closed, 4', closed_res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Eroded, 5', eroded_res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Filtered, 6', filtered_res)
-##    cv2.waitKey(0)
-##    cv2.imshow('Final, 7', final_res)
-##    cv2.waitKey(0)
+    rows, columns, dim = res.shape
+    # reduce size down to 20%
+    scale = 0.2
     
+    # 1) resize image
+    res = cv2.resize(res, (int(columns*scale), int(rows*scale)))
+
+    # 2) filter out noise (e.g. white glare/reflection)
+    median_res = set_median(res)
+
+    # 3) convert to grayscale
+    gray_res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
+
+    # 4) run Canny edge detection
+    canny_res = set_canny(gray_res)
+  
+    # 5) set the structuring element (kernel) separately for each of the following operations
+    
+    # 6) dilate edged image
+    dilated_res = set_dilate(canny_res)
+ 
+    # 7) closing dilated image
+    closed_res = set_close(dilated_res)
+
+    # 8) eroding image to get back to normal size
+    eroded_res = set_erode(closed_res)
+    
+    # 9) dilate one more time to get binary filtered image
+    filtered_res = set_dilate(eroded_res)
+
+    # 10) original image with the filtered image as a binary mask
+    mask = filtered_res
+    final_res = cv2.bitwise_and(median_res, median_res, mask = mask) 
+
     cv2.imwrite('final_filtered_res.jpg', final_res)
     
     identify_colors(final_res)
@@ -81,7 +230,7 @@ def identify_colors(processed_image):
         ([51, 30, 100], [255, 90, 170]),         # violet
         ([120, 120, 120], [160, 160, 160]),      # gray
         ([161, 161, 161], [255, 255, 255]),      # white
-        ([30, 70, 70], [50, 110, 130]),         # gold
+        ([30, 70, 70], [50, 110, 130]),          # gold
         ([180, 180, 180], [195, 195, 195])]      # silver
         
     global non_zero_pix
@@ -152,11 +301,11 @@ def identify_colors(processed_image):
     	count += 1
 	
     
-    # ignore black, gray, & white
-    # TO-DO: filter out white glare in original image
-    non_zero_pix[0] = 0
-    non_zero_pix[8] = 0
-    non_zero_pix[9] = 0
+##    # ignore black, gray, & white
+##    # TO-DO: filter out white glare in original image
+##    non_zero_pix[0] = 0
+##    non_zero_pix[8] = 0
+##    non_zero_pix[9] = 0
     
     # sort out top 3 colors found
     top_colors_array = sorted(zip(non_zero_pix, color, cx), reverse = True)[:4]
@@ -275,6 +424,6 @@ def calculate_value(color_array):
 
 
     
-process_image('resistor_1.jpg')
+process_image('resistor_black_background.jpg')
 
 
