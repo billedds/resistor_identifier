@@ -13,6 +13,32 @@ cx = []
 cy = []
 
 
+def gamma_correction(res):
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set Gamma correction')
+    cv2.createTrackbar('Gamma', 'Set Gamma correction', 0, 40, nothing)
+
+    original_res = res
+
+    while(True):
+        gamma = cv2.getTrackbarPos('Gamma', 'Set Gamma correction')
+        # need to scale gamma back down to [0, 4] with a step of 0.1
+        gamma = gamma / 10.0
+        gamma = 0.1 if gamma == 0 else gamma
+        inverse_gamma = 1.0 / gamma
+        table = np.array([((i / 255.0) ** inverse_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+        res = cv2.LUT(original_res, table)
+        cv2.imshow('Set Gamma correction', res)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return res
+
 def set_median(res):
 
     def nothing(x):
@@ -23,8 +49,8 @@ def set_median(res):
 
     while(True):
         median_kernel = cv2.getTrackbarPos('Filter level', 'Set noise-filtering parameter')
-        # need to make sure the kernel size is odd
 
+        # need to make sure the kernel size is odd
         if median_kernel == 0:
             median_kernel = 1
         
@@ -179,7 +205,12 @@ def process_image(input_image):
     
     # 1) resize image
     res = cv2.resize(res, (int(columns*scale), int(rows*scale)))
+    rows, columns, dim = res.shape
 
+    # 1.1) gamma correction
+    # cv2.imshow('Set Gamma correction', res)
+    res = gamma_correction(res)
+    
     # 2) filter out noise (e.g. white glare/reflection)
     median_res = set_median(res)
 
