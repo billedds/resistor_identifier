@@ -13,7 +13,40 @@ cx = []
 cy = []
 
 
-def gamma_correction(res):
+
+
+def set_color(color_checker):
+    
+    color_checker = cv2.imread(color_checker)
+    rows, columns, dim = color_checker.shape
+    scale= 0.2
+    color_checker = cv2.resize(color_checker, (int(columns*scale), int(rows*scale)))
+    rows, columns, dim = color_checker.shape
+
+    gray_color = cv2.cvtColor(color_checker, cv2.COLOR_BGR2GRAY)
+    cv2.imshow('Color checker', gray_color)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    # detect edges, dilate, close gaps, erode
+    canny_color = set_canny(gray_color)
+    dilate_color = set_dilate(canny_color)
+    close_color = set_close(dilate_color)
+    erode_color = set_erode(close_color)
+    processed_color = erode_color
+    processed_color = cv2.bitwise_not(processed_color)
+
+    params = cv2.SimpleBlobDetector_Params()
+    params.filterByArea = True
+    params.minArea = 1000
+
+    detector = cv2.SimpleBlobDetector_create(params)
+    keypoints = detector.detect(processed_color)
+    keypoints_color = cv2.drawKeypoints(processed_color, keypoints, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    cv2.imshow('Keypoints', keypoints_color)
+    cv2.waitKey(0)
+
+
+def set_gamma(res):
 
     def nothing(x):
         pass
@@ -38,6 +71,8 @@ def gamma_correction(res):
             break
 
     return res
+
+
 
 def set_median(res):
 
@@ -209,30 +244,50 @@ def process_image(input_image):
 
     # 1.1) gamma correction
     # cv2.imshow('Set Gamma correction', res)
-    res = gamma_correction(res)
+    res = set_gamma(res)
+    cv2.destroyAllWindows()
     
     # 2) filter out noise (e.g. white glare/reflection)
     median_res = set_median(res)
+    cv2.destroyAllWindows()
 
     # 3) convert to grayscale
     gray_res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
 
     # 4) run Canny edge detection
     canny_res = set_canny(gray_res)
+    cv2.destroyAllWindows()
   
     # 5) set the structuring element (kernel) separately for each of the following operations
     
     # 6) dilate edged image
     dilated_res = set_dilate(canny_res)
+    cv2.destroyAllWindows()
  
     # 7) closing dilated image
     closed_res = set_close(dilated_res)
+    cv2.destroyAllWindows()
 
     # 8) eroding image to get back to normal size
     eroded_res = set_erode(closed_res)
+    cv2.destroyAllWindows()
     
     # 9) dilate one more time to get binary filtered image
     filtered_res = set_dilate(eroded_res)
+    cv2.destroyAllWindows()
+
+    # 9.1) compute the rotated bounding box of the largest contour (rectangular)
+    # for cv2.findContours, first param is the image, second param tells OpenCV to compute the heirarchy
+    # (relationship) between contours, and third param tells OpenCV to compress the contours to save space
+    (_, contours, _) = cv2.findContours(filtered_res.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    sorted_contours = sorted(contours, key = cv2.contourArea, reverse = True)[0]
+    rectangle = cv2.minAreaRect(sorted_contours)
+    box = np.int0(cv2.boxPoints(rectangle))
+    cv2.drawContours(filtered_res, [box], -1, (0, 255, 0), 3)
+    cv2.namedWindow('Contours')
+    cv2.imshow('Contours', filtered_res)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     # 10) original image with the filtered image as a binary mask
     mask = filtered_res
@@ -454,7 +509,7 @@ def calculate_value(color_array):
 
 
 
-    
-process_image('resistor_black_background.jpg')
+set_color('color_checker.jpg')    
+# process_image('resistor_black_background.jpg')
 
 
