@@ -14,38 +14,34 @@ cy = []
 
 
 
-
 def set_color(color_checker):
-    
-    color_checker = cv2.imread(color_checker)
-    rows, columns, dim = color_checker.shape
-    scale= 0.2
-    color_checker = cv2.resize(color_checker, (int(columns*scale), int(rows*scale)))
-    rows, columns, dim = color_checker.shape
+
+    def nothing(x):
+        pass
+
+    cv2.namedWindow('Set threshold for color blocks')
+    cv2.createTrackbar('Lower threshold', 'Set threshold for color blocks', 0, 255, nothing)
+    # cv2.createTrackbar('Upper threshold', 'Set threshold for color blocks', 0, 255, nothing)
 
     gray_color = cv2.cvtColor(color_checker, cv2.COLOR_BGR2GRAY)
-    cv2.imshow('Color checker', gray_color)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    # detect edges, dilate, close gaps, erode
-    canny_color = set_canny(gray_color)
-    dilate_color = set_dilate(canny_color)
-    close_color = set_close(dilate_color)
-    erode_color = set_erode(close_color)
-    processed_color = erode_color
-    processed_color = cv2.bitwise_not(processed_color)
+    blurred_color = cv2.GaussianBlur(gray_color, (7, 7), 0)
+    thresh_upper = 255
 
-    params = cv2.SimpleBlobDetector_Params()
-    params.filterByArea = True
-    params.minArea = 1000
+    while(True):
+        thresh_lower = cv2.getTrackbarPos('Lower threshold', 'Set threshold for color blocks')
+        # thresh_upper = cv2.getTrackbarPos('Upper threshold', 'Set threshold for color blocks')
+        thresh_color = cv2.threshold(blurred_color, thresh_lower, thresh_upper, cv2.THRESH_BINARY_INV)[1]
 
-    detector = cv2.SimpleBlobDetector_create(params)
-    keypoints = detector.detect(processed_color)
-    keypoints_color = cv2.drawKeypoints(processed_color, keypoints, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    cv2.imshow('Keypoints', keypoints_color)
-    cv2.waitKey(0)
+        cv2.imshow('Set threshold for color blocks', thresh_color)
+        k = cv2.waitKey(1) & 0xFF
+
+        if k == 27:
+            break
+
+    return thresh_color
 
 
+        
 def set_gamma(res):
 
     def nothing(x):
@@ -231,7 +227,95 @@ def set_erode(closed_res):
 
 
 
-def process_image(input_image):
+def calibrate_color_checker(input_image):
+
+    # theoretical color values from color checker image, ordered BGR
+    # ordered left to right, then top to bottom
+    color_vals = []
+    color_vals.append([68, 82, 115])      # dark skin
+    color_vals.append([130, 150, 194])    # light skin
+    color_vals.append([157, 122, 98])     # blue sky
+    color_vals.append([67, 108, 87])      # foliage
+    color_vals.append([177, 128, 133])    # blue flower
+    color_vals.append([170, 189, 103])    # bluish green
+    color_vals.append([44, 126, 217])     # orange
+    color_vals.append([166, 91, 80])      # purple red
+    color_vals.append([99, 90, 193])      # moderate red
+    color_vals.append([108, 60, 94])      # purple
+    color_vals.append([64, 188, 157])     # yellow green
+    color_vals.append([46, 163, 224])     # orange yellow
+    color_vals.append([150, 61, 56])      # blue
+    color_vals.append([73, 148, 70])      # green
+    color_vals.append([60, 54, 175])      # red
+    color_vals.append([31, 199, 231])     # yellow
+    color_vals.append([149, 86, 187])     # magenta
+    color_vals.append([161, 133, 8])      # cyan
+    # skip white for now (bottom left)
+    color_vals.append([200, 200, 200])    # neutral 8
+    color_vals.append([160, 160, 160])    # neutral 65
+    color_vals.append([121, 122, 122])    # neutral 5
+    color_vals.append([85, 85, 85])       # neutral 35
+    color_vals.append([52, 52, 52])       # black 
+
+    color_checker = cv2.imread(input_image)
+    rows, columns, dim = color_checker.shape
+    scale= 0.15
+    color_checker = cv2.resize(color_checker, (int(columns*scale), int(rows*scale)))
+    rows, columns, dim = color_checker.shape
+    # mask the original image with the binary image returned from set_color()
+    mask = set_color(color_checker)
+    mask = set_erode(mask)
+    final_color = cv2.bitwise_and(color_checker, color_checker, mask = mask)
+    
+    # cv2.findContours returns set of outlines (AKA contours) that correspond with each of the
+    # white blobs on the image
+    contours = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[1]
+
+    center = []
+    actual_color_vals = []
+    count_loops = 0
+
+    for c in contours:
+        # compute the center of mass of the contour
+        moments = cv2.moments(c)
+        if moments["m00"] != 0:
+            cx = int(moments["m10"] / moments["m00"])
+            cy = int(moments["m01"] / moments["m00"])
+            center.append([cx, cy])
+        else:
+            center.append([cx, cy])
+
+        B = 0
+        G = 0
+        R = 0
+        count_avg = 0
+
+        # compute the average color of a 3 x 3 block centered at (cx, cy)within each colored block
+        # in the color checker image
+        for i in range(cy - 3, cy + 4):
+            for j in range(cx - 3, cx + 4):
+                B += color_checker[i, j][0]
+                G += color_checker[i, j][1]
+                R += color_checker[i, j][2]
+                count_avg += 1
+
+        B_avg = B / count_avg
+        G_avg = G / count_avg        
+        R_avg = R / count_avg
+        actual_color_vals.append([B_avg, G_avg, R_avg])
+        print('Actual color values: ', actual_color_vals[count_loops])
+        count_loops += 1
+
+        # draw the contour and center of the shape on the image
+        cv2.drawContours(color_checker, [c], -1, (0, 255, 0), 2)
+        cv2.rectangle(color_checker, (cx - 3, cy - 3), (cx + 3, cy + 3), (0, 255, 0), -1)
+
+        cv2.imshow('Color checker', color_checker)
+        cv2.waitKey(0)
+    
+    
+    
+def calibrate_resistor(input_image):
 
     res = cv2.imread(input_image)
     rows, columns, dim = res.shape
@@ -295,9 +379,6 @@ def process_image(input_image):
 
     cv2.imwrite('final_filtered_res.jpg', final_res)
     
-    identify_colors(final_res)
-
-
     
 
 def identify_colors(processed_image):
@@ -406,8 +487,10 @@ def identify_colors(processed_image):
 def calculate_value(color_array):
 
     # this function will calculate the value of the resistor in the image
-    # the value calculated will be based on the input array, which has [(# of non-zero pixels, associated color)]
-    # Note: gold represents 0.1 Ohm multiplier, +/- 5%; silver is 0.01 Ohm, +/-10%; neither hold an actual value
+    # the value calculated will be based on the input array, which has [(# of non-zero pixels,
+    # associated color)]
+    # Note: gold represents 0.1 Ohm multiplier, +/- 5%; silver is 0.01 Ohm, +/-10%; neither hold
+    # an actual value
     # ans = sorted(zip(color_array[:][:]), reverse = False)[:4]
     cx_ordered = []
     color_ordered = []
@@ -504,12 +587,8 @@ def calculate_value(color_array):
     print('This is a  '), resistor_val, (' Ohm resistor')
     print('The tolerance is +/- '), tolerance, (' %')
 
-            
-                
 
 
-
-set_color('color_checker.jpg')    
-# process_image('resistor_black_background.jpg')
+calibrate_color_checker('color_checker.jpg')
 
 
