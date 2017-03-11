@@ -2,12 +2,6 @@
     a. Could dilate pixels and close holes, then erode back to normal size
     b. Then do blob detection to find how many blobs of that particular color band (only count blobs if  > certain area of pixels)
   
-2) Print out color-checker image and color-checker image with values printed 
-    a. Use this for color calibration
-    b. Each color block is separated, so should do blob detection and labeling of each block
-        i.   Find the center of each individual block
-        ii.  Then take an average of a block of pixels using that center
-    c. Then make adjustments accordingly 
-        i.   Because each color is known, take an average of a block of pixels within each block of the color-checker image
-        ii.  Then compare the calculated value to the theoretical value, and save the offsets
-        iii. Use the offsets for upper and lower color boundaries OR for adjusting the colors within the image
+2) Compare actual vs. theoretical color checker image and adjust accordingly (possible adjusting gamma correction?)
+
+3) First & foremost, make sure color ranges are accurate and include all possibilities for best result
